@@ -67,12 +67,14 @@ export default function App() {
   const [currentPageRaw, setCurrentPage] = useState('');
   // Fall back to the first page if the current one was deleted (e.g. by undo).
   const currentPage = edits.pages.some((p) => p.id === currentPageRaw) ? currentPageRaw : (edits.pages[0]?.id ?? '');
-  const [dialog, setDialog] = useState<'save' | 'about' | { error: string } | null>(null);
+  const [dialog, setDialog] = useState<'save' | 'about' | { error: string } | { addAfter: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const workspaceRef = useRef<HTMLDivElement>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
+  const insertPdfInput = useRef<HTMLInputElement>(null);
+  const insertPdfAfter = useRef<string | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const imageTarget = useRef<{ page: string; at?: { x: number; y: number } }>({ page: '' });
   const clipboard = useRef<Annotation | null>(null);
@@ -365,11 +367,52 @@ export default function App() {
         return { pages, annotations: [...s.annotations, ...newAnns] };
       },
     });
+    showPage(id);
+  };
+
+  const showPage = (id: string) => {
     setCurrentPage(id);
     requestAnimationFrame(() => {
       workspaceRef.current?.querySelector(`[data-page="${id}"]`)?.scrollIntoView({ block: 'start' });
       document.querySelector(`.thumb.active`)?.scrollIntoView({ block: 'nearest' });
     });
+  };
+
+  const pickInsertPdf = (afterId: string | null) => {
+    insertPdfAfter.current = afterId;
+    insertPdfInput.current!.value = '';
+    insertPdfInput.current!.click();
+  };
+
+  /** Insert all pages of another PDF after `afterId`, merging it into the document's source bytes. */
+  const insertPdfFile = async (file: File, afterId: string | null) => {
+    if (!doc) return;
+    finishEditing();
+    setBusy('Inserting…');
+    try {
+      const [{ appendPdf }, { openPdf }] = await Promise.all([import('./export'), import('./pdf')]);
+      const { bytes, added } = await appendPdf(doc.bytes, new Uint8Array(await file.arrayBuffer()));
+      if (!added) throw new Error('It has no pages.');
+      const { doc: pdf, sizes, transforms, destroy } = await openPdf(bytes);
+      const first = sizes.length - added;
+      const entries: PageEntry[] = sizes.slice(first).map((s, i) => ({ id: newId(), src: first + i, ...s }));
+      doc.destroy();
+      setDoc({ ...doc, bytes, pdf, transforms, destroy });
+      dispatch({
+        type: 'apply',
+        fn: (s) => {
+          const pages = [...s.pages];
+          pages.splice(afterId === null ? 0 : pages.findIndex((x) => x.id === afterId) + 1, 0, ...entries);
+          return { ...s, pages };
+        },
+      });
+      showPage(entries[0].id);
+      await storeDoc({ name: doc.name, bytes }).catch(() => {});
+    } catch (e) {
+      setDialog({ error: `Could not insert "${file.name}". ${e instanceof Error ? e.message : ''}` });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const copyPage = (p: string) => {
@@ -394,6 +437,8 @@ export default function App() {
       const like = (after && pageEntry(after)) || editsRef.current.pages[0];
       insertPage({ id: '', src: null, w: like?.w ?? 612, h: like?.h ?? 792 }, [], after);
     },
+    insertPdf: pickInsertPdf,
+    add: (after) => setDialog({ addAfter: after }),
     canPaste: !!pageClipboard,
   };
 
@@ -595,6 +640,7 @@ export default function App() {
       label: 'Page',
       items: [
         { label: 'New Blank Page', disabled: !doc, onClick: () => pageActions.insertBlank(currentPage) },
+        { label: 'Insert PDF…', disabled: !doc, onClick: () => pickInsertPdf(currentPage) },
         'sep',
         { label: 'Cut Page', disabled: !doc || edits.pages.length <= 1, onClick: () => pageActions.cut(currentPage) },
         { label: 'Copy Page', disabled: !doc, onClick: () => pageActions.copy(currentPage) },
@@ -697,6 +743,13 @@ export default function App() {
         }}
       />
       <input
+        ref={insertPdfInput} type="file" accept="application/pdf,.pdf" hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) insertPdfFile(f, insertPdfAfter.current);
+        }}
+      />
+      <input
         ref={imageInput} type="file" accept={IMAGE_ACCEPT} hidden
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -720,7 +773,17 @@ export default function App() {
           <div className="buttons"><button className="btn" onClick={() => setDialog(null)}>OK</button></div>
         </Dialog>
       )}
-      {dialog && typeof dialog === 'object' && (
+      {dialog && typeof dialog === 'object' && 'addAfter' in dialog && (
+        <Dialog title="Add Page" onClose={() => setDialog(null)}>
+          <p>Add a new blank page, or insert the pages of another PDF, after page {edits.pages.findIndex((p) => p.id === dialog.addAfter) + 1}?</p>
+          <div className="buttons">
+            <button className="btn" autoFocus onClick={() => { setDialog(null); pageActions.insertBlank(dialog.addAfter); }}>Blank Page</button>
+            <button className="btn" onClick={() => { setDialog(null); pickInsertPdf(dialog.addAfter); }}>Insert PDF…</button>
+            <button className="btn" onClick={() => setDialog(null)}>Cancel</button>
+          </div>
+        </Dialog>
+      )}
+      {dialog && typeof dialog === 'object' && 'error' in dialog && (
         <Dialog title="PDF Paint" onClose={() => setDialog(null)}>
           <p>{dialog.error}</p>
           <div className="buttons"><button className="btn" autoFocus onClick={() => setDialog(null)}>OK</button></div>

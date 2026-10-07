@@ -12,6 +12,9 @@ export interface PageActions {
   move: (id: string, delta: number) => void;
   reorder: (id: string, toIndex: number) => void;
   insertBlank: (afterId: string | null) => void;
+  insertPdf: (afterId: string | null) => void;
+  /** Ask whether to add a blank page or insert a PDF after `afterId`. */
+  add: (afterId: string) => void;
   cut: (id: string) => void;
   copy: (id: string) => void;
   paste: (afterId: string | null) => void;
@@ -70,7 +73,7 @@ export function Thumbnails({ actions }: { actions: PageActions }) {
   const focusList = () => listRef.current?.focus({ preventScroll: true });
 
   const buttons: [keyof typeof ICONS, string, boolean, () => void][] = [
-    ['add', 'New blank page after this one', false, () => actions.insertBlank(currentPage)],
+    ['add', 'Add a page after this one', false, () => actions.add(currentPage)],
     ['cut', 'Cut page (Ctrl+X)', single, () => actions.cut(currentPage)],
     ['copy', 'Copy page (Ctrl+C)', false, () => actions.copy(currentPage)],
     ['paste', 'Paste page after this one (Ctrl+V)', !actions.canPaste, () => actions.paste(currentPage)],
@@ -133,8 +136,8 @@ export function Thumbnails({ actions }: { actions: PageActions }) {
         ))}
         <button
           className="add-page"
-          title="Add a blank page at the end"
-          onClick={() => actions.insertBlank(edits.pages[edits.pages.length - 1]?.id ?? null)}
+          title="Add a page at the end"
+          onClick={() => actions.add(edits.pages[edits.pages.length - 1].id)}
         >
           +
         </button>
@@ -144,6 +147,7 @@ export function Thumbnails({ actions }: { actions: PageActions }) {
           {(
             [
               ['New Blank Page', '', false, () => actions.insertBlank(menu.id)],
+              ['Insert PDF…', '', false, () => actions.insertPdf(menu.id)],
               'sep',
               ['Cut Page', 'Ctrl+X', single, () => actions.cut(menu.id)],
               ['Copy Page', 'Ctrl+C', false, () => actions.copy(menu.id)],

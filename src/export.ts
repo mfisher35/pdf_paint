@@ -116,6 +116,21 @@ export async function exportPdf(
   return out.save();
 }
 
+/**
+ * Append every page of `extra` to the end of `base`. The base's own pages keep their
+ * indices, so existing PageEntry.src values stay valid against the returned bytes.
+ */
+export async function appendPdf(base: Uint8Array, extra: Uint8Array) {
+  const doc = await PDFDocument.load(base, { ignoreEncryption: true });
+  const add = await PDFDocument.load(extra, { ignoreEncryption: true });
+  // Re-saving an encrypted file without its key would corrupt its content.
+  if (doc.isEncrypted) throw new Error('PDFs cannot be inserted into a password-protected document.');
+  if (add.isEncrypted) throw new Error('Password-protected PDFs cannot be inserted.');
+  const pages = await doc.copyPages(add, add.getPageIndices());
+  for (const pg of pages) doc.addPage(pg);
+  return { bytes: await doc.save(), added: pages.length };
+}
+
 async function addRasterizedPage(out: PDFDocument, pdfDoc: PDFDocumentProxy, p: PageEntry, anns: Annotation[]) {
   const SCALE = 3; // 216 DPI
   const canvas = document.createElement('canvas');
