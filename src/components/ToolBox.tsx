@@ -2,9 +2,13 @@ import type { FillMode, Style, Tool } from '../types';
 import { TOOL_ICONS, TOOL_NAMES } from './icons';
 
 // Laid out in Paint's order: two columns, top to bottom.
-const TOOLS: Tool[] = ['select', 'image', 'redact', 'pencil', 'text', 'line', 'rect', 'ellipse'];
+const TOOLS: Tool[] = [
+  'rect-select', 'ellipse-select', 'select', 'wand', 'eraser', 'fill', 'picker', 'image', 'redact', 'pencil', 'text', 'line', 'rect', 'ellipse',
+];
 const FILL_MODES: FillMode[] = ['outline', 'outline-fill', 'fill'];
 const LINE_WIDTHS = [1, 2, 3, 5, 8];
+/** Eraser sizes in points, drawn as Paint's four growing squares. */
+const ERASER_SIZES = [4, 8, 14, 22];
 
 interface Props {
   tool: Tool;
@@ -48,6 +52,22 @@ export function ToolBox({ tool, style, onTool, onStyle }: Props) {
             </div>
           </>
         )}
+        {tool === 'eraser' &&
+          ERASER_SIZES.map((size, i) => (
+            <div
+              key={size}
+              className={`opt${style.eraserSize === size ? ' active' : ''}`}
+              style={{ height: 6 + i * 2 + 6 }}
+              title={`${size}pt eraser`}
+              onClick={() => onStyle({ eraserSize: size })}
+            >
+              <div style={{ width: 4 + i * 2, height: 4 + i * 2, background: style.eraserSize === size ? '#fff' : '#000' }} />
+            </div>
+          ))}
+        {tool === 'fill' && <div className="note">Right-click: 2nd color</div>}
+        {tool === 'picker' && <div className="note">Right-click: 2nd color</div>}
+        {tool === 'wand' && <div className="note">Click a shape</div>}
+        {(tool === 'rect-select' || tool === 'ellipse-select') && <div className="note">Drag to select</div>}
         {tool === 'redact' && <div className="note">Drag to black out</div>}
         {tool === 'image' && <div className="note">Click page to place</div>}
       </div>

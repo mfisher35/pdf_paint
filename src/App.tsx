@@ -28,6 +28,7 @@ const DEFAULT_STYLE: Style = {
   secondary: '#ffffff',
   fillMode: 'outline',
   lineWidth: 2,
+  eraserSize: 8,
   font: 'Arial',
   size: 14,
   bold: false,
@@ -39,9 +40,18 @@ const DEFAULT_STYLE: Style = {
 const EMPTY: EditState = { annotations: [], pages: [] };
 const ZOOMS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
-const TOOL_KEYS: Record<string, Tool> = { s: 'select', r: 'redact', p: 'pencil', l: 'line', b: 'rect', e: 'ellipse', t: 'text', i: 'image' };
+const TOOL_KEYS: Record<string, Tool> = {
+  s: 'select', m: 'rect-select', o: 'ellipse-select', w: 'wand', x: 'eraser', f: 'fill', k: 'picker',
+  r: 'redact', p: 'pencil', l: 'line', b: 'rect', e: 'ellipse', t: 'text', i: 'image',
+};
 const TOOL_HINTS: Record<Tool, string> = {
   select: 'Click an object to select it. Drag to move, drag handles to resize (Shift keeps proportions).',
+  'rect-select': 'Drag a rectangle to cut out that part of the page. Drag it to move it, or press Del to erase it. Shift draws a square.',
+  'ellipse-select': 'Drag an ellipse to cut out that part of the page. Drag it to move it, or press Del to erase it. Shift draws a circle.',
+  wand: 'Click a shape on the page to select it. Drag it to move it, or press Del to erase it.',
+  eraser: 'Drag to erase with the secondary color. Pick a size in the tool box.',
+  fill: 'Click an area or shape to fill it with the primary color. Right-click uses the secondary color.',
+  picker: 'Click to pick a color for the primary color. Right-click sets the secondary color.',
   redact: 'Drag to draw a black redaction box. Saving can remove the text underneath for good.',
   pencil: 'Drag to draw freehand. Pick a thickness in the tool box.',
   line: 'Drag to draw a straight line. Shift snaps to 45°.',
@@ -67,7 +77,7 @@ export default function App() {
   const [currentPageRaw, setCurrentPage] = useState('');
   // Fall back to the first page if the current one was deleted (e.g. by undo).
   const currentPage = edits.pages.some((p) => p.id === currentPageRaw) ? currentPageRaw : (edits.pages[0]?.id ?? '');
-  const [dialog, setDialog] = useState<'save' | 'about' | { error: string } | { addAfter: string } | null>(null);
+  const [dialog, setDialog] = useState<'save' | 'about' | { error: string } | { addAfter: string | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -79,11 +89,17 @@ export default function App() {
   const imageTarget = useRef<{ page: string; at?: { x: number; y: number } }>({ page: '' });
   const clipboard = useRef<Annotation | null>(null);
   const [pageClipboard, setPageClipboard] = useState<{ entry: PageEntry; anns: Annotation[] } | null>(null);
+  /** A spot between two thumbnails picked as the place to paste or add a page: index of the page it's before. */
+  const [pageGap, setPageGap] = useState<number | null>(null);
   const sidebarHasFocus = () => !!document.activeElement?.closest('.sidebar');
   // Refs so event handlers always see the latest values.
   const editsRef = useRef(edits);
   editsRef.current = edits;
   const editingRef = useRef(editing);
+  /** The tool to go back to after using the color picker. */
+  const prevTool = useRef<Tool>('select');
+  /** The latest magic wand selection, until it's moved, deleted or dropped. */
+  const lifted = useRef<{ hole: string; extract: Annotation } | null>(null);
   const selected = edits.annotations.find((a) => a.id === selectedId) ?? null;
 
   // ---------- Loading & persistence ----------
@@ -166,6 +182,7 @@ export default function App() {
       return { primary: a.stroke, secondary: a.fill, fillMode: a.fillMode, lineWidth: a.lineWidth };
     }
     if (a.type === 'pencil' || a.type === 'line') return { primary: a.color, lineWidth: a.lineWidth };
+    if (a.type === 'eraser') return { secondary: a.color, eraserSize: a.lineWidth };
     if (a.type === 'text') {
       return {
         primary: a.color, font: a.font, size: a.size, bold: a.bold, italic: a.italic, underline: a.underline,
@@ -215,6 +232,8 @@ export default function App() {
       p = { stroke: next.primary, fill: next.secondary, fillMode: next.fillMode, lineWidth: next.lineWidth };
     } else if (selected.type === 'pencil' || selected.type === 'line') {
       p = { color: next.primary, lineWidth: next.lineWidth };
+    } else if (selected.type === 'eraser') {
+      p = { color: next.secondary, lineWidth: next.eraserSize };
     } else if (selected.type === 'text') {
       p = {
         color: next.primary, font: next.font, size: next.size, bold: next.bold, italic: next.italic,
@@ -229,11 +248,38 @@ export default function App() {
 
   const changeTool = (t: Tool) => {
     finishEditing();
+    if (t === 'picker' && tool !== 'picker') prevTool.current = tool;
     setTool(t);
     // A new tool starts fresh, so palette/option clicks don't restyle the last object drawn.
     if (t !== tool && t !== 'select') setSelectedId(null);
     if (t === 'image') pickImage(currentPage);
   };
+
+  const pickColor = useCallback((color: string, secondary: boolean) => {
+    setStyle((s) => ({ ...s, [secondary ? 'secondary' : 'primary']: color }));
+    setTool(prevTool.current);
+  }, []);
+
+  // ---------- Magic wand ----------
+
+  const lift = useCallback((hole: Annotation, extract: Annotation) => {
+    dispatch({ type: 'apply', fn: (s) => ({ ...s, annotations: [...s.annotations, hole, extract] }) });
+    lifted.current = { hole: hole.id, extract };
+    setSelectedId(extract.id);
+  }, []);
+
+  // Once the wand selection is let go, drop it again if nothing was done with it,
+  // so stray wand clicks don't leave copies of page content in the saved PDF.
+  useEffect(() => {
+    const l = lifted.current;
+    if (!l || selectedId === l.extract.id) return;
+    lifted.current = null;
+    const ex = edits.annotations.find((a) => a.id === l.extract.id);
+    const untouched = ex && ex.x === l.extract.x && ex.y === l.extract.y && ex.w === l.extract.w && ex.h === l.extract.h && ex.page === l.extract.page;
+    if (untouched && edits.annotations.some((a) => a.id === l.hole)) {
+      dispatch({ type: 'live', fn: (s) => ({ ...s, annotations: s.annotations.filter((a) => a.id !== l.hole && a.id !== l.extract.id) }) });
+    }
+  }, [selectedId, edits]);
 
   // ---------- Images ----------
 
@@ -356,6 +402,7 @@ export default function App() {
   /** Insert a page (with its annotations) after `afterId`, or at the start when null. */
   const insertPage = (entry: PageEntry, anns: Annotation[], afterId: string | null) => {
     finishEditing();
+    setPageGap(null);
     const id = newId();
     const copy = { ...entry, id };
     const newAnns = anns.map((a) => ({ ...a, id: newId(), page: id }));
@@ -437,9 +484,15 @@ export default function App() {
       const like = (after && pageEntry(after)) || editsRef.current.pages[0];
       insertPage({ id: '', src: null, w: like?.w ?? 612, h: like?.h ?? 792 }, [], after);
     },
-    insertPdf: pickInsertPdf,
+    insertPdf: (after) => {
+      setPageGap(null);
+      pickInsertPdf(after);
+    },
     add: (after) => setDialog({ addAfter: after }),
     canPaste: !!pageClipboard,
+    gap: pageGap,
+    setGap: setPageGap,
+    target: () => (pageGap === null ? currentPage : pageGap === 0 ? null : edits.pages[pageGap - 1]?.id ?? currentPage),
   };
 
   const onScroll = () => {
@@ -513,7 +566,8 @@ export default function App() {
       // Clipboard and Delete act on pages while the page list has focus.
       if (mod && k === 'c') { e.preventDefault(); pageActions.copy(currentPage); return; }
       if (mod && k === 'x') { e.preventDefault(); pageActions.cut(currentPage); return; }
-      if (mod && k === 'v') { e.preventDefault(); pageActions.paste(currentPage); return; }
+      if (mod && k === 'v') { e.preventDefault(); pageActions.paste(pageActions.target()); return; }
+      if (k === 'escape' && pageGap !== null) { setPageGap(null); return; }
       if (k === 'delete' || k === 'backspace') { e.preventDefault(); deletePage(currentPage); return; }
       if (k === 'arrowup' || k === 'arrowdown') {
         e.preventDefault();
@@ -659,7 +713,7 @@ export default function App() {
     () =>
       doc && {
         pdf: doc.pdf, edits, dispatch, zoom, tool, setTool, style, selectedId, select,
-        editing, startEditing, finishEditing, currentPage, insertImageAt: pickImage,
+        editing, startEditing, finishEditing, currentPage, insertImageAt: pickImage, pickColor, lift,
       },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [doc, edits, zoom, tool, style, selectedId, editing, currentPage],
@@ -775,10 +829,10 @@ export default function App() {
       )}
       {dialog && typeof dialog === 'object' && 'addAfter' in dialog && (
         <Dialog title="Add Page" onClose={() => setDialog(null)}>
-          <p>Add a new blank page, or insert the pages of another PDF, after page {edits.pages.findIndex((p) => p.id === dialog.addAfter) + 1}?</p>
+          <p>Add a new blank page, or insert the pages of another PDF, {dialog.addAfter === null ? 'at the start' : `after page ${edits.pages.findIndex((p) => p.id === dialog.addAfter) + 1}`}?</p>
           <div className="buttons">
             <button className="btn" autoFocus onClick={() => { setDialog(null); pageActions.insertBlank(dialog.addAfter); }}>Blank Page</button>
-            <button className="btn" onClick={() => { setDialog(null); pickInsertPdf(dialog.addAfter); }}>Insert PDF…</button>
+            <button className="btn" onClick={() => { setDialog(null); pageActions.insertPdf(dialog.addAfter); }}>Insert PDF…</button>
             <button className="btn" onClick={() => setDialog(null)}>Cancel</button>
           </div>
         </Dialog>

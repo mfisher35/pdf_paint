@@ -5,7 +5,8 @@ import {
 } from 'pdf-lib';
 import type { Annotation, EditState, PageEntry, PageSize, TextAnn } from './types';
 import { BASELINE, LINE_HEIGHT, TEXT_PAD, layoutText } from './text';
-import { drawAnnotations, paintOrder, shapeColors, strokePoints } from './draw';
+import { paintOrder, shapeColors, strokePoints } from './draw';
+import { rasterizePage } from './raster';
 import type { PDFDocumentProxy } from './render';
 
 type Matrix = [number, number, number, number, number, number];
@@ -132,20 +133,7 @@ export async function appendPdf(base: Uint8Array, extra: Uint8Array) {
 }
 
 async function addRasterizedPage(out: PDFDocument, pdfDoc: PDFDocumentProxy, p: PageEntry, anns: Annotation[]) {
-  const SCALE = 3; // 216 DPI
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(p.w * SCALE);
-  canvas.height = Math.ceil(p.h * SCALE);
-  if (p.src !== null) {
-    const page = await pdfDoc.getPage(p.src + 1);
-    const viewport = page.getViewport({ scale: SCALE });
-    await page.render({ canvas, viewport, background: '#ffffff' }).promise;
-  } else {
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  await drawAnnotations(canvas.getContext('2d')!, anns, SCALE);
+  const canvas = await rasterizePage(pdfDoc, p, anns, 3); // 216 DPI
   const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/png'));
   const img = await out.embedPng(new Uint8Array(await blob.arrayBuffer()));
   const pg = out.addPage([p.w, p.h]);
@@ -173,13 +161,14 @@ async function drawVector(
         page.drawRectangle({ x: a.x, y: yUp, width: a.w, height: a.h, color: rgb(0, 0, 0) });
         break;
       case 'pencil':
-      case 'line': {
+      case 'line':
+      case 'eraser': {
         const [first, ...rest] = strokePoints(a);
         page.pushOperators(
           pushGraphicsState(),
           setStrokingColor(color(a.color)),
           setLineWidth(a.lineWidth),
-          setLineCap(LineCapStyle.Round),
+          setLineCap(a.type === 'eraser' ? LineCapStyle.Projecting : LineCapStyle.Round),
           setLineJoin(LineJoinStyle.Round),
           moveTo(first[0], H - first[1]),
           ...rest.map(([x, y]) => lineTo(x, H - y)),

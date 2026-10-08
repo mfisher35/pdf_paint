@@ -49,11 +49,12 @@ export async function drawAnnotations(ctx: CanvasRenderingContext2D, anns: Annot
         break;
       case 'pencil':
       case 'line':
+      case 'eraser':
         ctx.beginPath();
         strokePoints(a).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
         ctx.strokeStyle = a.color;
         ctx.lineWidth = a.lineWidth;
-        ctx.lineCap = 'round';
+        ctx.lineCap = a.type === 'eraser' ? 'square' : 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
         break;

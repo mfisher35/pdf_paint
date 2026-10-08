@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Annotation, EditState, PageEntry, Style, StrokeAnn, TextAnn, Tool } from './types';
+import type { Annotation, EditState, ImageAnn, PageEntry, Style, StrokeAnn, TextAnn, Tool } from './types';
 import type { HistoryAction } from './history';
 import type { PDFDocumentProxy } from './render';
 import { layoutText, textHeight } from './text';
@@ -25,6 +25,13 @@ export interface EditorApi {
   finishEditing: () => void;
   currentPage: string;
   insertImageAt: (page: string, at?: { x: number; y: number }) => void;
+  /** Eyedropper result: set the primary (or secondary) color and go back to the previous tool. */
+  pickColor: (color: string, secondary: boolean) => void;
+  /**
+   * Magic wand result: add `extract` (the picked pixels) over `hole` (secondary color), and select
+   * the extract so it can be moved or deleted. Both are dropped again if the extract is left untouched.
+   */
+  lift: (hole: ImageAnn, extract: ImageAnn) => void;
 }
 
 export const EditorContext = createContext<EditorApi | null>(null);
@@ -45,6 +52,12 @@ export const cursorStore = {
     return () => cursorListeners.delete(l);
   },
 };
+
+/**
+ * Outline of a lifted pixel selection (magic wand / marquee), keyed by the extract's id: SVG path data
+ * in a w x h coordinate space that's stretched over the annotation's box, so it follows moves and resizes.
+ */
+export const selectionOutlines = new Map<string, { path: string; w: number; h: number }>();
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
 

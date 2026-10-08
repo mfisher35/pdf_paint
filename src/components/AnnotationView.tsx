@@ -24,17 +24,19 @@ export const AnnotationView = memo(function AnnotationView({ a, scale, hidden }:
       return <div className="ann" style={{ ...box, background: '#000' }} data-id={a.id} />;
 
     case 'pencil':
-    case 'line': {
+    case 'line':
+    case 'eraser': {
       const pts = strokePoints(a)
         .map(([x, y]) => `${(x - a.x) * scale},${(y - a.y) * scale}`)
         .join(' ');
       const lw = a.lineWidth * scale;
+      const cap = a.type === 'eraser' ? 'square' : 'round';
       return (
         // Only the stroke itself (plus a little slack) is clickable, not its whole bounding box.
         <div className="ann stroke-ann" style={box} data-id={a.id}>
           <svg width={a.w * scale} height={a.h * scale}>
-            <polyline points={pts} fill="none" stroke={a.color} strokeWidth={lw} strokeLinecap="round" strokeLinejoin="round" />
-            <polyline className="hit" points={pts} fill="none" stroke="transparent" strokeWidth={Math.max(lw, 10)} strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points={pts} fill="none" stroke={a.color} strokeWidth={lw} strokeLinecap={cap} strokeLinejoin="round" />
+            <polyline className="hit" points={pts} fill="none" stroke="transparent" strokeWidth={Math.max(lw, 10)} strokeLinecap={cap} strokeLinejoin="round" />
           </svg>
         </div>
       );

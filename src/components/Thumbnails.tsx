@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { PageEntry } from '../types';
 import { useEditor } from '../editor';
 import { paintOrder } from '../draw';
@@ -13,13 +13,18 @@ export interface PageActions {
   reorder: (id: string, toIndex: number) => void;
   insertBlank: (afterId: string | null) => void;
   insertPdf: (afterId: string | null) => void;
-  /** Ask whether to add a blank page or insert a PDF after `afterId`. */
-  add: (afterId: string) => void;
+  /** Ask whether to add a blank page or insert a PDF after `afterId` (at the start when null). */
+  add: (afterId: string | null) => void;
   cut: (id: string) => void;
   copy: (id: string) => void;
   paste: (afterId: string | null) => void;
   remove: (id: string) => void;
   canPaste: boolean;
+  /** The gap between thumbnails picked as an insertion point (index of the page after it), or null. */
+  gap: number | null;
+  setGap: (gap: number | null) => void;
+  /** Where a paste or added page goes: after this page id, or at the start when null. */
+  target: () => string | null;
 }
 
 const Icon = ({ children }: { children: React.ReactNode }) => (
@@ -72,11 +77,12 @@ export function Thumbnails({ actions }: { actions: PageActions }) {
 
   const focusList = () => listRef.current?.focus({ preventScroll: true });
 
+  const gapSet = actions.gap !== null;
   const buttons: [keyof typeof ICONS, string, boolean, () => void][] = [
-    ['add', 'Add a page after this one', false, () => actions.add(currentPage)],
+    ['add', gapSet ? 'Add a page at the marked spot' : 'Add a page after this one', false, () => actions.add(actions.target())],
     ['cut', 'Cut page (Ctrl+X)', single, () => actions.cut(currentPage)],
     ['copy', 'Copy page (Ctrl+C)', false, () => actions.copy(currentPage)],
-    ['paste', 'Paste page after this one (Ctrl+V)', !actions.canPaste, () => actions.paste(currentPage)],
+    ['paste', gapSet ? 'Paste page at the marked spot (Ctrl+V)' : 'Paste page after this one (Ctrl+V)', !actions.canPaste, () => actions.paste(actions.target())],
     ['remove', 'Delete page (Del)', single, () => actions.remove(currentPage)],
   ];
 
@@ -98,42 +104,48 @@ export function Thumbnails({ actions }: { actions: PageActions }) {
       </div>
       <div className="thumbs" ref={listRef} tabIndex={0} onDragLeave={() => setDrop(null)}>
         {edits.pages.map((p, i) => (
-          <div
-            key={p.id}
-            className={`thumb${p.id === currentPage ? ' active' : ''}${drop?.index === i ? (drop.after ? ' drop-after' : ' drop-before') : ''}`}
-            draggable
-            onClick={() => actions.goto(p.id)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              actions.goto(p.id);
-              focusList();
-              setMenu({ x: e.clientX, y: e.clientY, id: p.id });
-            }}
-            onDragStart={(e) => {
-              dragging.current = p.id;
-              e.dataTransfer.effectAllowed = 'move';
-            }}
-            onDragOver={(e) => {
-              if (dragging.current === null) return;
-              e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
-              setDrop({ index: i, after: e.clientY > r.top + r.height / 2 });
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragging.current !== null && drop) actions.reorder(dragging.current, drop.index + (drop.after ? 1 : 0));
-              dragging.current = null;
-              setDrop(null);
-            }}
-            onDragEnd={() => {
-              dragging.current = null;
-              setDrop(null);
-            }}
-          >
-            <Thumb entry={p} />
-            <span className="num">{i + 1}</span>
-          </div>
+          <Fragment key={p.id}>
+            <Gap index={i} actions={actions} />
+            <div
+              className={`thumb${p.id === currentPage ? ' active' : ''}${drop?.index === i ? (drop.after ? ' drop-after' : ' drop-before') : ''}`}
+              draggable
+              onClick={() => {
+                actions.setGap(null);
+                actions.goto(p.id);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                actions.goto(p.id);
+                focusList();
+                setMenu({ x: e.clientX, y: e.clientY, id: p.id });
+              }}
+              onDragStart={(e) => {
+                dragging.current = p.id;
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                if (dragging.current === null) return;
+                e.preventDefault();
+                const r = e.currentTarget.getBoundingClientRect();
+                setDrop({ index: i, after: e.clientY > r.top + r.height / 2 });
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragging.current !== null && drop) actions.reorder(dragging.current, drop.index + (drop.after ? 1 : 0));
+                dragging.current = null;
+                setDrop(null);
+              }}
+              onDragEnd={() => {
+                dragging.current = null;
+                setDrop(null);
+              }}
+            >
+              <Thumb entry={p} />
+              <span className="num">{i + 1}</span>
+            </div>
+          </Fragment>
         ))}
+        <Gap index={edits.pages.length} actions={actions} />
         <button
           className="add-page"
           title="Add a page at the end"
@@ -178,6 +190,17 @@ export function Thumbnails({ actions }: { actions: PageActions }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** The space between two thumbnails; clicking it marks it as where the next pasted page goes. */
+function Gap({ index, actions }: { index: number; actions: PageActions }) {
+  return (
+    <div
+      className={`gap${actions.gap === index ? ' active' : ''}`}
+      title="Click to paste a page here"
+      onClick={() => actions.setGap(actions.gap === index ? null : index)}
+    />
   );
 }
 

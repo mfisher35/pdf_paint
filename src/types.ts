@@ -1,4 +1,5 @@
-export type Tool = 'select' | 'redact' | 'pencil' | 'line' | 'rect' | 'ellipse' | 'text' | 'image';
+export type Tool =
+  | 'select' | 'rect-select' | 'ellipse-select' | 'wand' | 'eraser' | 'fill' | 'picker' | 'redact' | 'pencil' | 'line' | 'rect' | 'ellipse' | 'text' | 'image';
 export type FillMode = 'outline' | 'outline-fill' | 'fill';
 export type FontFamily = 'Arial' | 'Times New Roman' | 'Courier New';
 
@@ -17,9 +18,12 @@ export interface RedactAnn extends Base {
   type: 'redact';
 }
 
-/** Freehand pencil stroke or straight line (a line is just a two-point stroke). */
+/**
+ * Freehand pencil stroke or straight line (a line is just a two-point stroke).
+ * An eraser stroke is a pencil stroke with a square brush, painted in the secondary color like Paint's eraser.
+ */
 export interface StrokeAnn extends Base {
-  type: 'pencil' | 'line';
+  type: 'pencil' | 'line' | 'eraser';
   /** Flat [x0, y0, x1, y1, ...] as fractions of the box, so moving/resizing just changes the box. */
   points: number[];
   color: string;
@@ -80,6 +84,7 @@ export interface Style {
   secondary: string;
   fillMode: FillMode;
   lineWidth: number;
+  eraserSize: number;
   font: FontFamily;
   size: number;
   bold: boolean;

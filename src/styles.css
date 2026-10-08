@@ -91,8 +91,13 @@ select { padding-right: 2px; }
 .mini button:disabled { color: var(--shadow); }
 .thumbs {
   flex: 1; overflow-y: auto; background: var(--shadow); box-shadow: var(--sunken);
-  padding: 8px 6px; display: flex; flex-direction: column; gap: 10px; align-items: center;
+  padding: 0 6px 8px; display: flex; flex-direction: column; align-items: center;
 }
+/* Clickable space between thumbnails; a blue line marks the one picked as the paste spot. */
+.thumbs .gap { flex: none; align-self: stretch; height: 10px; position: relative; cursor: pointer; }
+.thumbs .gap::after { content: ''; position: absolute; left: 4px; right: 4px; top: 4px; height: 2px; }
+.thumbs .gap:hover::after { background: rgba(255, 255, 255, 0.35); }
+.thumbs .gap.active::after { background: #0080ff; top: 3px; height: 4px; box-shadow: 0 0 0 1px #fff; }
 .thumb { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 3px; cursor: pointer; }
 .thumb .frame { position: relative; background: #fff; box-shadow: 1px 1px 0 #000; overflow: hidden; }
 .thumb .num { color: #fff; padding: 0 5px; }
@@ -143,6 +148,13 @@ select { padding-right: 2px; }
 .layer.tool-pencil {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M1 15 L2.5 10.5 L11 2 L14 5 L5.5 13.5 Z' fill='%23ffff80' stroke='black'/%3E%3Cpath d='M1 15 L2.5 10.5 L5.5 13.5 Z' fill='black'/%3E%3C/svg%3E") 1 15, crosshair;
 }
+.layer.tool-wand, .layer.tool-rect-select, .layer.tool-ellipse-select { cursor: crosshair; }
+.layer.tool-fill {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M2 8 L7 3 L12 8 L7 13 Z' fill='white' stroke='black'/%3E%3Cpath d='M12 8 Q15 10 14 14 L13 14 Q13 11 12 9 Z' fill='black'/%3E%3C/svg%3E") 14 14, crosshair;
+}
+.layer.tool-picker {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M1 15 L1 13 L9 5 L11 7 L3 15 Z' fill='white' stroke='black'/%3E%3Cpath d='M8 4 L12 8 M10 6 L13 3 A1.4 1.4 0 0 0 11 1 Z' fill='black' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E") 1 15, crosshair;
+}
 .ann.stroke-ann { pointer-events: none; }
 .ann.stroke-ann .hit { pointer-events: stroke; }
 .layer.tool-text { cursor: text; }
@@ -158,6 +170,15 @@ select { padding-right: 2px; }
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 .selection.movable { pointer-events: auto; cursor: move; }
+/* A lifted pixel selection shows "marching ants" around its actual shape instead of the box. */
+.selection.shaped { outline: none; box-shadow: none; }
+.ants { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.ants path, .ants ellipse { fill: none; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.ants .ants-bg { stroke: #fff; }
+.ants .ants-fg { stroke: #000; stroke-dasharray: 4 4; animation: ants 0.5s linear infinite; }
+@keyframes ants { to { stroke-dashoffset: -8; } }
+.marquee { position: absolute; pointer-events: none; outline: 1px dashed #000; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8); }
+.marquee.ellipse { outline: none; box-shadow: none; }
 .handle {
   position: absolute; width: 7px; height: 7px; background: var(--navy); border: 1px solid #fff;
   pointer-events: auto; transform: translate(-50%, -50%);
