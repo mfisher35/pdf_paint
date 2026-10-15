@@ -1,6 +1,6 @@
 # Builds the Tauri desktop app for Windows, macOS and Linux.
 # Push a tag like v1.0.0 (or run it by hand from the Actions tab) and the installers
-# are attached to a draft GitHub release for that version.
+# are attached to a draft GitHub release for that version, and to the run's Artifacts.
 name: Desktop build
 
 on:
@@ -9,7 +9,41 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Create the draft release once up front. If each build job made its own, the parallel
+  # jobs would race and split the installers across several duplicate drafts.
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.result }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create draft release
+        id: release
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { version } = require('./src-tauri/tauri.conf.json');
+            const tag = `v${version}`;
+            // Reuse an existing draft for this version so reruns don't pile up duplicates.
+            const releases = await github.paginate(github.rest.repos.listReleases, context.repo);
+            const existing = releases.find((r) => r.draft && r.tag_name === tag);
+            if (existing) return existing.id;
+            const { data } = await github.rest.repos.createRelease({
+              ...context.repo,
+              tag_name: tag,
+              target_commitish: context.sha,
+              name: `PDF Paint ${tag}`,
+              body: 'Download the installer for your system below.',
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+
   build:
+    needs: create-release
     permissions:
       contents: write
     strategy:
@@ -17,16 +51,20 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
+            name: windows
             args: ''
           - platform: macos-latest
+            name: macos-arm64
             args: '--target aarch64-apple-darwin'
           - platform: macos-latest
+            name: macos-x64
             args: '--target x86_64-apple-darwin'
           - platform: ubuntu-22.04
+            name: linux
             args: ''
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -34,7 +72,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -53,9 +91,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'PDF Paint v__VERSION__'
-          releaseBody: 'Download the installer for your system below.'
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+      # Also keep the installers on the run itself, downloadable from its summary page.
+      - uses: actions/upload-artifact@v5
+        with:
+          name: pdf-paint-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/**/release/bundle/nsis/*.exe
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/deb/*.deb
+            src-tauri/target/**/release/bundle/rpm/*.rpm
