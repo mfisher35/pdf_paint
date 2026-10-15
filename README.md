@@ -8,6 +8,17 @@ npm run dev      # http://localhost:5173
 npm run build    # static site in dist/
 ```
 
+## Desktop app (Tauri)
+
+Needs [Rust](https://rustup.rs) plus the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
+
+```sh
+npm run desktop        # run the desktop app in dev mode
+npm run desktop:build  # installers in src-tauri/target/release/bundle/
+```
+
+Each OS builds its own installers (.msi/.exe on Windows, .dmg/.app on macOS, .AppImage/.deb/.rpm on Linux). To build all of them, push a tag like `v1.0.0`; the "Desktop build" GitHub Action attaches the installers to a draft release. Builds are unsigned, so Windows SmartScreen and macOS Gatekeeper will warn on first launch.
+
 ## Features
 - Open a PDF (File > Open, Ctrl+O, or drag & drop). It never leaves the browser; the file and your edits are autosaved to IndexedDB so a refresh picks up where you left off. File > Close Document clears it.
 - Page thumbnails sidebar: click to jump, drag to reorder, ▲ ▼ to move pages.

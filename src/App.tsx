@@ -39,6 +39,7 @@ const DEFAULT_STYLE: Style = {
 
 const EMPTY: EditState = { annotations: [], pages: [] };
 const ZOOMS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const IS_DESKTOP = '__TAURI_INTERNALS__' in window;
 
 const TOOL_KEYS: Record<string, Tool> = {
   s: 'select', m: 'rect-select', o: 'ellipse-select', w: 'wand', x: 'eraser', f: 'fill', k: 'picker',
@@ -537,10 +538,17 @@ export default function App() {
     try {
       const { exportPdf } = await import('./export');
       const bytes = await exportPdf(doc.bytes, doc.pdf, doc.transforms, editsRef.current, { flattenRedacted });
+      const name = fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      if (IS_DESKTOP) {
+        // Desktop webviews ignore <a download>, so use the native Save dialog.
+        const { savePdfNative } = await import('./desktop');
+        await savePdfNative(bytes, name);
+        return;
+      }
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      a.download = name;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
