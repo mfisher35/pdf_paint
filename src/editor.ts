@@ -32,6 +32,8 @@ export interface EditorApi {
    * the extract so it can be moved or deleted. Both are dropped again if the extract is left untouched.
    */
   lift: (hole: ImageAnn, extract: ImageAnn) => void;
+  /** Magnifier click: step to the next (or previous) magnifier level, keeping `at` (page points) under the pointer. */
+  magnify: (dir: 1 | -1, page: string, at: { x: number; y: number }, client: { x: number; y: number }) => void;
 }
 
 export const EditorContext = createContext<EditorApi | null>(null);

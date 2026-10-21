@@ -49,6 +49,12 @@ export const TOOL_ICONS: Record<Tool, React.ReactNode> = {
       <path d="M8 4 L12 8 M10 6 L13 3 A1.4 1.4 0 0 0 11 1 Z" fill="#000" stroke="#000" strokeWidth="1.5" />
     </S>
   ),
+  zoom: (
+    <S>
+      <circle cx="6.5" cy="6.5" r="4.5" fill="#c0e0ff" stroke="#000" strokeWidth="1.5" style={{ shapeRendering: 'auto' }} />
+      <path d="M10 10 L14.5 14.5" stroke="#000" strokeWidth="2.5" style={{ shapeRendering: 'auto' }} />
+    </S>
+  ),
   redact: (
     <S>
       <rect x="1" y="3" width="14" height="10" fill="#fff" stroke="#808080" />
@@ -101,6 +107,7 @@ export const TOOL_NAMES: Record<Tool, string> = {
   eraser: 'Eraser (X)',
   fill: 'Fill With Color (F)',
   picker: 'Pick Color (K)',
+  zoom: 'Magnifier (Z)',
   redact: 'Redact (R)',
   pencil: 'Pencil (P)',
   line: 'Line (L)',

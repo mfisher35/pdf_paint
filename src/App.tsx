@@ -8,7 +8,7 @@ import {
   type EditorApi, type TextEditSession,
 } from './editor';
 import { MenuBar, type Menu } from './components/MenuBar';
-import { ToolBox } from './components/ToolBox';
+import { MAGNIFY_LEVELS, ToolBox } from './components/ToolBox';
 import { ColorBox } from './components/ColorBox';
 import { FontBar } from './components/FontBar';
 import { Thumbnails, type PageActions } from './components/Thumbnails';
@@ -42,7 +42,7 @@ const ZOOMS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 const IS_DESKTOP = '__TAURI_INTERNALS__' in window;
 
 const TOOL_KEYS: Record<string, Tool> = {
-  s: 'select', m: 'rect-select', o: 'ellipse-select', w: 'wand', x: 'eraser', f: 'fill', k: 'picker',
+  s: 'select', m: 'rect-select', o: 'ellipse-select', w: 'wand', x: 'eraser', f: 'fill', k: 'picker', z: 'zoom',
   r: 'redact', p: 'pencil', l: 'line', b: 'rect', e: 'ellipse', t: 'text', i: 'image',
 };
 const TOOL_HINTS: Record<Tool, string> = {
@@ -53,6 +53,7 @@ const TOOL_HINTS: Record<Tool, string> = {
   eraser: 'Drag to erase with the secondary color. Pick a size in the tool box.',
   fill: 'Click an area or shape to fill it with the primary color. Right-click uses the secondary color.',
   picker: 'Click to pick a color for the primary color. Right-click sets the secondary color.',
+  zoom: 'Click the page to zoom in there, right-click to zoom out. Or pick a zoom level in the tool box.',
   redact: 'Drag to draw a black redaction box. Saving can remove the text underneath for good.',
   pencil: 'Drag to draw freehand. Pick a thickness in the tool box.',
   line: 'Drag to draw a straight line. Shift snaps to 45°.',
@@ -136,6 +137,11 @@ export default function App() {
     });
     (async () => {
       try {
+        if (IS_DESKTOP) {
+          // A PDF the app was opened with wins over restoring the last session.
+          const { handleOpenedFiles } = await import('./desktop');
+          if (await handleOpenedFiles((name, bytes) => openBytesRef.current(name, bytes))) return;
+        }
         const stored = await loadStoredDoc();
         if (stored) await loadBytes(stored.name, stored.bytes, await loadStoredEdits());
       } catch {
@@ -154,19 +160,23 @@ export default function App() {
     return () => clearTimeout(t);
   }, [edits, doc]);
 
-  const openFile = async (file: File) => {
+  const openBytes = async (name: string, bytes: Uint8Array) => {
     setBusy('Opening…');
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await loadBytes(file.name, bytes);
-      await storeDoc({ name: file.name, bytes }).catch(() => {});
+      await loadBytes(name, bytes);
+      await storeDoc({ name, bytes }).catch(() => {});
       await storeEdits({ annotations: [], pages: [] }).catch(() => {});
     } catch (e) {
-      setDialog({ error: `Could not open "${file.name}". ${e instanceof Error ? e.message : ''}` });
+      setDialog({ error: `Could not open "${name}". ${e instanceof Error ? e.message : ''}` });
     } finally {
       setBusy(null);
     }
   };
+  // Files opened from the OS arrive through a listener set up once, so it needs the latest.
+  const openBytesRef = useRef(openBytes);
+  openBytesRef.current = openBytes;
+
+  const openFile = async (file: File) => openBytes(file.name, new Uint8Array(await file.arrayBuffer()));
 
   const closeDoc = async () => {
     doc?.destroy();
@@ -522,6 +532,21 @@ export default function App() {
     const next = dir > 0 ? ZOOMS.find((z) => z > zoom + 0.001) : [...ZOOMS].reverse().find((z) => z < zoom - 0.001);
     applyZoom(next ?? zoom);
   };
+  const magnify = (dir: 1 | -1, page: string, at: { x: number; y: number }, client: { x: number; y: number }) => {
+    const next = dir > 0
+      ? MAGNIFY_LEVELS.find((z) => z > zoom + 0.001) ?? MAGNIFY_LEVELS.at(-1)!
+      : [...MAGNIFY_LEVELS].reverse().find((z) => z < zoom - 0.001) ?? MAGNIFY_LEVELS[0];
+    setZoom(next);
+    // Once the pages have re-laid out, scroll so the clicked spot stays under the pointer.
+    requestAnimationFrame(() => {
+      const ws = workspaceRef.current;
+      const el = ws?.querySelector<HTMLElement>(`[data-page="${page}"]`);
+      if (!ws || !el) return;
+      const r = el.getBoundingClientRect();
+      ws.scrollLeft += r.left + at.x * next - client.x;
+      ws.scrollTop += r.top + at.y * next - client.y;
+    });
+  };
   const fitWidth = () => {
     const ws = workspaceRef.current;
     if (!ws || !doc) return;
@@ -721,7 +746,7 @@ export default function App() {
     () =>
       doc && {
         pdf: doc.pdf, edits, dispatch, zoom, tool, setTool, style, selectedId, select,
-        editing, startEditing, finishEditing, currentPage, insertImageAt: pickImage, pickColor, lift,
+        editing, startEditing, finishEditing, currentPage, insertImageAt: pickImage, pickColor, lift, magnify,
       },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [doc, edits, zoom, tool, style, selectedId, editing, currentPage],
@@ -756,7 +781,7 @@ export default function App() {
         <EditorContext.Provider value={api}>
           <div className="body">
             <Thumbnails actions={pageActions} />
-            <ToolBox tool={tool} style={style} onTool={changeTool} onStyle={updateStyle} />
+            <ToolBox tool={tool} style={style} zoom={zoom} onTool={changeTool} onStyle={updateStyle} onZoom={applyZoom} />
             <div className="main">
               {showFontBar && <FontBar style={style} onStyle={updateStyle} />}
               <div

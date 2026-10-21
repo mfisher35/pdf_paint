@@ -37,6 +37,15 @@
       "icons/icon.ico"
     ],
     "category": "GraphicsAndDesign",
+    "fileAssociations": [
+      {
+        "ext": ["pdf"],
+        "name": "PDF Document",
+        "description": "PDF document",
+        "mimeType": "application/pdf",
+        "role": "Editor"
+      }
+    ],
     "shortDescription": "A Windows 98 Paint-style PDF editor"
   }
 }

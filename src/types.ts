@@ -1,5 +1,5 @@
 export type Tool =
-  | 'select' | 'rect-select' | 'ellipse-select' | 'wand' | 'eraser' | 'fill' | 'picker' | 'redact' | 'pencil' | 'line' | 'rect' | 'ellipse' | 'text' | 'image';
+  | 'select' | 'rect-select' | 'ellipse-select' | 'wand' | 'eraser' | 'fill' | 'picker' | 'redact' | 'pencil' | 'line' | 'rect' | 'ellipse' | 'text' | 'image' | 'zoom';
 export type FillMode = 'outline' | 'outline-fill' | 'fill';
 export type FontFamily = 'Arial' | 'Times New Roman' | 'Courier New';
 

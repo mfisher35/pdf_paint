@@ -3,21 +3,25 @@ import { TOOL_ICONS, TOOL_NAMES } from './icons';
 
 // Laid out in Paint's order: two columns, top to bottom.
 const TOOLS: Tool[] = [
-  'rect-select', 'ellipse-select', 'select', 'wand', 'eraser', 'fill', 'picker', 'image', 'redact', 'pencil', 'text', 'line', 'rect', 'ellipse',
+  'rect-select', 'ellipse-select', 'select', 'wand', 'eraser', 'fill', 'picker', 'zoom', 'image', 'redact', 'pencil', 'text', 'line', 'rect', 'ellipse',
 ];
 const FILL_MODES: FillMode[] = ['outline', 'outline-fill', 'fill'];
 const LINE_WIDTHS = [1, 2, 3, 5, 8];
 /** Eraser sizes in points, drawn as Paint's four growing squares. */
 const ERASER_SIZES = [4, 8, 14, 22];
+/** Magnifier levels, like Paint's 1x/2x/6x/8x but sized for reading a page. */
+export const MAGNIFY_LEVELS = [1, 1.25, 1.5, 2];
 
 interface Props {
   tool: Tool;
   style: Style;
+  zoom: number;
   onTool: (t: Tool) => void;
   onStyle: (patch: Partial<Style>) => void;
+  onZoom: (z: number) => void;
 }
 
-export function ToolBox({ tool, style, onTool, onStyle }: Props) {
+export function ToolBox({ tool, style, zoom, onTool, onStyle, onZoom }: Props) {
   return (
     <div className="toolbox">
       <div className="tools">
@@ -64,6 +68,15 @@ export function ToolBox({ tool, style, onTool, onStyle }: Props) {
               <div style={{ width: 4 + i * 2, height: 4 + i * 2, background: style.eraserSize === size ? '#fff' : '#000' }} />
             </div>
           ))}
+        {tool === 'zoom' &&
+          MAGNIFY_LEVELS.map((z) => {
+            const active = Math.abs(zoom - z) < 0.001;
+            return (
+              <div key={z} className={`opt zoom-opt${active ? ' active' : ''}`} title={`Zoom to ${z * 100}%`} onClick={() => onZoom(z)}>
+                {z * 100}%
+              </div>
+            );
+          })}
         {tool === 'fill' && <div className="note">Right-click: 2nd color</div>}
         {tool === 'picker' && <div className="note">Right-click: 2nd color</div>}
         {tool === 'wand' && <div className="note">Click a shape</div>}

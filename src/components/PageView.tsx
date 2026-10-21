@@ -368,7 +368,7 @@ function AnnotationLayer({ entry }: { entry: PageEntry }) {
 
   const onPointerDown = (e: React.PointerEvent) => {
     // Fill and pick use the secondary color on right-click, like Paint.
-    const secondary = e.button === 2 && (tool === 'fill' || tool === 'picker');
+    const secondary = e.button === 2 && (tool === 'fill' || tool === 'picker' || tool === 'zoom');
     if (e.button !== 0 && !secondary) return;
     if (ed.editing) {
       // First click outside the text box just finishes editing, like Paint.
@@ -382,6 +382,11 @@ function AnnotationLayer({ entry }: { entry: PageEntry }) {
     if (tool === 'picker') {
       const pt = toPt(e);
       withPixels((img, px, py) => ed.pickColor(pixelColor(img, px, py), secondary), pt);
+      return;
+    }
+    if (tool === 'zoom') {
+      // Left-click zooms in, right-click zooms out, like Paint's magnifier.
+      ed.magnify(secondary ? -1 : 1, page, toPt(e), { x: e.clientX, y: e.clientY });
       return;
     }
     if (tool === 'fill') {
