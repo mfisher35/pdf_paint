@@ -1,6 +1,7 @@
 # Builds the Tauri desktop app for Windows, macOS and Linux.
 # Push a tag like v1.0.0 (or run it by hand from the Actions tab) and the installers
 # are attached to a draft GitHub release for that version, and to the run's Artifacts.
+# A tag run builds the tag's version (v1.2.3 -> 1.2.3); a manual run uses tauri.conf.json's.
 name: Desktop build
 
 on:
@@ -17,16 +18,31 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.release.outputs.result }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+
+      - name: Resolve version
+        id: version
+        uses: actions/github-script@v8
+        with:
+          script: |
+            let version = require('./src-tauri/tauri.conf.json').version;
+            if (context.ref.startsWith('refs/tags/')) {
+              version = context.ref.slice('refs/tags/'.length).replace(/^v/, '');
+            }
+            // The Windows MSI bundler only accepts plain numeric versions.
+            if (!/^\d+\.\d+\.\d+$/.test(version)) core.setFailed(`Version "${version}" must look like 1.2.3`);
+            core.setOutput('version', version);
 
       - name: Create draft release
         id: release
         uses: actions/github-script@v8
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         with:
           script: |
-            const { version } = require('./src-tauri/tauri.conf.json');
-            const tag = `v${version}`;
+            const tag = `v${process.env.VERSION}`;
             // Reuse an existing draft for this version so reruns don't pile up duplicates.
             const releases = await github.paginate(github.rest.repos.listReleases, context.repo);
             const existing = releases.find((r) => r.draft && r.tag_name === tag);
@@ -86,6 +102,17 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - run: npm ci
+
+      # Stamp the resolved version into the app config so the binaries and installers carry it.
+      - name: Set app version
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs"), f = "src-tauri/tauri.conf.json";
+            const conf = JSON.parse(fs.readFileSync(f, "utf8"));
+            conf.version = process.argv[1];
+            fs.writeFileSync(f, JSON.stringify(conf, null, 2) + "\n");
+          ' "${{ needs.create-release.outputs.version }}"
 
       - uses: tauri-apps/tauri-action@v0
         env:
