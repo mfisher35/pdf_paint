@@ -4,9 +4,18 @@ import type { PageSize } from './types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
+// Served by the pdfjs-assets plugin in vite.config.ts. Without wasmUrl, CCITT/JBIG2 images
+// (the text layer of most scanned PDFs) silently fail to decode and are dropped.
+const assets = new URL(`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}pdfjs/`, location.href).href;
+
 export async function openPdf(bytes: Uint8Array) {
   // pdf.js transfers the buffer to its worker, so hand it a copy.
-  const task = pdfjs.getDocument({ data: bytes.slice() });
+  const task = pdfjs.getDocument({
+    data: bytes.slice(),
+    wasmUrl: `${assets}wasm/`,
+    cMapUrl: `${assets}cmaps/`,
+    standardFontDataUrl: `${assets}standard_fonts/`,
+  });
   const doc = await task.promise;
   const sizes: PageSize[] = [];
   const transforms: number[][] = [];
