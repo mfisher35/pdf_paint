@@ -216,6 +216,15 @@ textarea.text-editor {
 .statusbar > div { box-shadow: var(--thin-sunken); padding: 2px 4px; height: 18px; white-space: nowrap; overflow: hidden; }
 .statusbar > div:first-child { flex: 1; }
 .statusbar > div:not(:first-child) { width: 130px; }
+.statusbar > .zoom-slider { width: 200px; display: flex; align-items: center; gap: 2px; padding: 0 4px; }
+.zoom-slider .pct { width: 34px; text-align: right; flex: none; }
+.zoom-slider input[type='range'] { flex: 1; min-width: 0; height: 14px; margin: 0; accent-color: var(--navy); }
+.zoom-btn {
+  width: 16px; height: 14px; padding: 0; border: none; flex: none; line-height: 12px; font: bold 11px var(--font);
+  background: var(--face); box-shadow: var(--raised);
+}
+.zoom-btn:active:not(:disabled) { box-shadow: var(--pressed); }
+.zoom-btn:disabled { color: var(--shadow); }
 
 /* ---------- Dialogs ---------- */
 .modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; z-index: 100; background: rgba(0, 0, 0, 0.1); }

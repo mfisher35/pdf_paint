@@ -583,6 +583,20 @@ export default function App() {
     }
   };
 
+  const print = async () => {
+    if (!doc) return;
+    finishEditing();
+    setBusy('Preparing to print…');
+    try {
+      const { printPages } = await import('./print');
+      await printPages(doc.pdf, editsRef.current);
+    } catch (e) {
+      setDialog({ error: `Printing failed. ${e instanceof Error ? e.message : ''}` });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // ---------- Keyboard, clipboard, drag & drop ----------
 
   const handlers = useRef({ onKey: (_: KeyboardEvent) => {}, onPaste: (_: ClipboardEvent) => {} });
@@ -613,6 +627,7 @@ export default function App() {
       }
     }
     if (mod && k === 's') { e.preventDefault(); setDialog('save'); }
+    else if (mod && k === 'p') { e.preventDefault(); print(); }
     else if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
     else if (mod && (k === 'c' || k === 'x') && selected) {
@@ -688,6 +703,8 @@ export default function App() {
       items: [
         { label: 'Open…', shortcut: 'Ctrl+O', onClick: () => pdfInput.current?.click() },
         { label: 'Save as PDF…', shortcut: 'Ctrl+S', disabled: !doc, onClick: () => setDialog('save') },
+        'sep',
+        { label: 'Print…', shortcut: 'Ctrl+P', disabled: !doc || !!busy, onClick: print },
         'sep',
         { label: 'Close Document', disabled: !doc, onClick: closeDoc },
       ],
@@ -818,7 +835,8 @@ export default function App() {
         <div>{busy ?? (doc ? TOOL_HINTS[tool] : 'Open a PDF to get started. Your file never leaves this browser.')}</div>
         <CursorStatus />
         <div>{selected ? `${Math.round(selected.w)} × ${Math.round(selected.h)} pt` : ''}</div>
-        <div>{doc ? `Page ${pageIdx + 1} of ${edits.pages.length} · ${Math.round(zoom * 100)}%` : ''}</div>
+        <div>{doc ? `Page ${pageIdx + 1} of ${edits.pages.length}` : ''}</div>
+        <ZoomSlider zoom={zoom} disabled={!doc} onZoom={applyZoom} onStep={zoomStep} />
       </div>
 
       <input
@@ -877,6 +895,32 @@ export default function App() {
         </Dialog>
       )}
       {dragOver && <div className="big-drop">Drop a PDF to open it, or a picture to insert it</div>}
+    </div>
+  );
+}
+
+/** Zoom slider for the status bar. The track is logarithmic so 25%–100% gets as much room as 100%–400%. */
+function ZoomSlider({ zoom, disabled, onZoom, onStep }: {
+  zoom: number;
+  disabled: boolean;
+  onZoom: (z: number) => void;
+  onStep: (dir: 1 | -1) => void;
+}) {
+  return (
+    <div className="zoom-slider">
+      <span className="pct">{disabled ? '' : `${Math.round(zoom * 100)}%`}</span>
+      <button className="zoom-btn" disabled={disabled} title="Zoom Out" onClick={() => onStep(-1)}>−</button>
+      <input
+        type="range" min={-2} max={2} step={0.01} disabled={disabled} title="Zoom"
+        value={Math.log2(zoom)}
+        onChange={(e) => {
+          const z = 2 ** Number(e.target.value);
+          // Snap to 100% when close, since that's the level people aim for.
+          onZoom(Math.abs(z - 1) < 0.04 ? 1 : z);
+        }}
+        onDoubleClick={() => onZoom(1)}
+      />
+      <button className="zoom-btn" disabled={disabled} title="Zoom In" onClick={() => onStep(1)}>+</button>
     </div>
   );
 }
