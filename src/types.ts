@@ -1,6 +1,8 @@
 export type Tool =
   | 'select' | 'rect-select' | 'ellipse-select' | 'wand' | 'eraser' | 'fill' | 'picker' | 'redact' | 'pencil' | 'line' | 'rect' | 'ellipse' | 'text' | 'image' | 'zoom';
 export type FillMode = 'outline' | 'outline-fill' | 'fill';
+/** The text tool either selects the PDF's own text for copying or adds new text boxes. */
+export type TextMode = 'select' | 'add';
 export type FontFamily = 'Arial' | 'Times New Roman' | 'Courier New';
 
 /** All geometry is in PDF points, relative to the top-left of the (unscaled) page viewport. */
@@ -91,4 +93,5 @@ export interface Style {
   italic: boolean;
   underline: boolean;
   textOpaque: boolean;
+  textMode: TextMode;
 }

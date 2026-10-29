@@ -4,6 +4,8 @@ import type { PageSize } from './types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
+export const { TextLayer } = pdfjs;
+
 // Served by the pdfjs-assets plugin in vite.config.ts. Without wasmUrl, CCITT/JBIG2 images
 // (the text layer of most scanned PDFs) silently fail to decode and are dropped.
 const assets = new URL(`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}pdfjs/`, location.href).href;

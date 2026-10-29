@@ -1,4 +1,4 @@
-import type { FillMode, Style, Tool } from '../types';
+import type { FillMode, Style, TextMode, Tool } from '../types';
 import { TOOL_ICONS, TOOL_NAMES } from './icons';
 
 // Laid out in Paint's order: two columns, top to bottom.
@@ -6,6 +6,10 @@ const TOOLS: Tool[] = [
   'rect-select', 'ellipse-select', 'select', 'wand', 'eraser', 'fill', 'picker', 'zoom', 'image', 'redact', 'pencil', 'text', 'line', 'rect', 'ellipse',
 ];
 const FILL_MODES: FillMode[] = ['outline', 'outline-fill', 'fill'];
+const TEXT_MODES: [TextMode, string, string][] = [
+  ['select', 'Select', 'Select text on the page to copy it'],
+  ['add', 'Add', 'Add a new text box'],
+];
 const LINE_WIDTHS = [1, 2, 3, 5, 8];
 /** Eraser sizes in points, drawn as Paint's four growing squares. */
 const ERASER_SIZES = [4, 8, 14, 22];
@@ -46,8 +50,15 @@ export function ToolBox({ tool, style, zoom, onTool, onStyle, onZoom }: Props) {
         {(tool === 'pencil' || tool === 'line') && (
           <WidthOptions value={style.lineWidth} onChange={(lineWidth) => onStyle({ lineWidth })} />
         )}
-        {tool === 'text' && (
+        {tool === 'text' &&
+          TEXT_MODES.map(([m, label, title]) => (
+            <div key={m} className={`opt zoom-opt${style.textMode === m ? ' active' : ''}`} title={title} onClick={() => onStyle({ textMode: m })}>
+              {label}
+            </div>
+          ))}
+        {tool === 'text' && style.textMode === 'add' && (
           <>
+            <div style={{ height: 4 }} />
             <div className={`opt${style.textOpaque ? ' active' : ''}`} style={{ height: 26 }} title="Opaque background (uses secondary color)" onClick={() => onStyle({ textOpaque: true })}>
               <TextBgPreview opaque active={style.textOpaque} />
             </div>

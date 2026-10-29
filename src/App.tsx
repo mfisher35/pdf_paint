@@ -35,6 +35,7 @@ const DEFAULT_STYLE: Style = {
   italic: false,
   underline: false,
   textOpaque: false,
+  textMode: 'add',
 };
 
 const EMPTY: EditState = { annotations: [], pages: [] };
@@ -62,6 +63,7 @@ const TOOL_HINTS: Record<Tool, string> = {
   text: 'Click or drag to make a text box, then type. Click a text box to edit it.',
   image: 'Click the page to insert a JPG, PNG or BMP picture. You can also drop or paste one.',
 };
+const SELECT_TEXT_HINT = 'Drag across the page to select its text, then press Ctrl+C to copy it.';
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
@@ -237,6 +239,12 @@ export default function App() {
   const updateStyle = (patch: Partial<Style>) => {
     const next = { ...style, ...patch };
     setStyle(next);
+    if ('textMode' in patch) {
+      // Switching text modes isn't a style change; just drop any text box being edited.
+      finishEditing();
+      setSelectedId(null);
+      return;
+    }
     if (!selected) return;
     let p: Partial<Annotation> | null = null;
     if (selected.type === 'rect' || selected.type === 'ellipse') {
@@ -769,7 +777,7 @@ export default function App() {
     [doc, edits, zoom, tool, style, selectedId, editing, currentPage],
   );
 
-  const showFontBar = doc && (tool === 'text' || selected?.type === 'text');
+  const showFontBar = doc && ((tool === 'text' && style.textMode === 'add') || selected?.type === 'text');
 
   return (
     <div
@@ -781,7 +789,7 @@ export default function App() {
       }}
       onDragLeave={(e) => e.relatedTarget === null && setDragOver(false)}
       onDrop={onDrop}
-      onContextMenu={(e) => !isTyping(e.target) && e.preventDefault()}
+      onContextMenu={(e) => !isTyping(e.target) && !(e.target as HTMLElement).closest('.textLayer') && e.preventDefault()}
     >
       <div className="title-bar">
         <PaintIcon />
@@ -832,7 +840,7 @@ export default function App() {
       )}
 
       <div className="statusbar">
-        <div>{busy ?? (doc ? TOOL_HINTS[tool] : 'Open a PDF to get started. Your file never leaves this browser.')}</div>
+        <div>{busy ?? (doc ? (tool === 'text' && style.textMode === 'select' ? SELECT_TEXT_HINT : TOOL_HINTS[tool]) : 'Open a PDF to get started. Your file never leaves this browser.')}</div>
         <CursorStatus />
         <div>{selected ? `${Math.round(selected.w)} × ${Math.round(selected.h)} pt` : ''}</div>
         <div>{doc ? `Page ${pageIdx + 1} of ${edits.pages.length}` : ''}</div>

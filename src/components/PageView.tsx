@@ -42,14 +42,39 @@ export function PageCanvas({ src, scale, near }: { src: number | null; scale: nu
   return near && src !== null ? <canvas ref={ref} /> : null;
 }
 
+/** pdf.js's invisible text layer over a page, so its text can be selected and copied. */
+function PageText({ src, scale }: { src: number; scale: number }) {
+  const { pdf } = useEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current!;
+    let layer: { cancel: () => void } | null = null;
+    let cancelled = false;
+    Promise.all([pdf.getPage(src + 1), import('../pdf')]).then(([p, { TextLayer }]) => {
+      if (cancelled) return;
+      const tl = new TextLayer({ textContentSource: p.streamTextContent(), container: el, viewport: p.getViewport({ scale }) });
+      layer = tl;
+      tl.render().catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      layer?.cancel();
+      el.replaceChildren();
+    };
+  }, [pdf, src, scale]);
+  return <div ref={ref} className="textLayer" style={{ '--total-scale-factor': scale } as React.CSSProperties} />;
+}
+
 export function PageView({ entry }: { entry: PageEntry }) {
-  const { zoom } = useEditor();
+  const { zoom, tool, style } = useEditor();
   const ref = useRef<HTMLDivElement>(null);
   const near = useNearViewport(ref);
+  const selectText = tool === 'text' && style.textMode === 'select' && near && entry.src !== null;
   return (
     <div className="page" ref={ref} data-page={entry.id} style={{ width: entry.w * zoom, height: entry.h * zoom }}>
       <PageCanvas src={entry.src} scale={zoom} near={near} />
       <AnnotationLayer entry={entry} />
+      {selectText && <PageText src={entry.src!} scale={zoom} />}
     </div>
   );
 }
